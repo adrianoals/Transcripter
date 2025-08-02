@@ -6,6 +6,7 @@ import sounddevice as sd
 import soundfile as sf
 from pytubefix import YouTube
 import numpy as np
+import subprocess
 
 import questionary
 from rich.console import Console
@@ -21,6 +22,80 @@ db = TinyDB("transcricoes.json")
 client = Groq()
 console = Console()
 
+def selecionar_arquivo_video():
+    """Seleciona um arquivo de vídeo usando interface gráfica"""
+    try:
+        import tkinter as tk
+        from tkinter import filedialog
+        
+        root = tk.Tk()
+        root.withdraw()  # Esconde a janela principal
+        
+        arquivo = filedialog.askopenfilename(
+            title="Selecione um arquivo de vídeo",
+            filetypes=[
+                ("Vídeos", "*.mp4 *.avi *.mov *.mkv *.wmv *.flv *.webm"),
+                ("Todos os arquivos", "*.*")
+            ]
+        )
+        root.destroy()
+        return arquivo if arquivo else None
+    except ImportError:
+        # Fallback para sistemas sem tkinter
+        console.print("[yellow]Interface gráfica não disponível. Digite o caminho do arquivo:[/yellow]")
+        arquivo = questionary.text("Caminho do arquivo de vídeo:").ask()
+        # Limpar aspas se houver
+        if arquivo:
+            arquivo = arquivo.strip().strip("'\"")
+        return arquivo
+
+def extrair_audio_video(arquivo_video):
+    """Extrai áudio de um arquivo de vídeo usando ffmpeg"""
+    try:
+        audio_temp = tempfile.mktemp(suffix=".mp3")
+        
+        cmd = [
+            'ffmpeg', '-i', arquivo_video, 
+            '-vn', '-acodec', 'mp3', 
+            '-ar', '16000', '-ac', '1', 
+            '-b:a', '64k', '-y', audio_temp
+        ]
+        
+        console.print(f"[blue]Extraindo áudio de: {os.path.basename(arquivo_video)}[/blue]")
+        result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+        
+        if os.path.exists(audio_temp) and os.path.getsize(audio_temp) > 0:
+            # Verificar tamanho do arquivo
+            size_mb = os.path.getsize(audio_temp) / (1024 * 1024)
+            console.print(f"[blue]Tamanho do áudio: {size_mb:.1f} MB[/blue]")
+            
+            # Se for muito grande, comprimir mais
+            if size_mb > 20:  # Limite da API Groq é ~25MB
+                console.print("[yellow]Arquivo muito grande, comprimindo...[/yellow]")
+                audio_compressed = tempfile.mktemp(suffix=".mp3")
+                cmd_compress = [
+                    'ffmpeg', '-i', audio_temp,
+                    '-acodec', 'mp3', '-ar', '8000', '-ac', '1',
+                    '-b:a', '32k', '-y', audio_compressed
+                ]
+                subprocess.run(cmd_compress, check=True, capture_output=True, text=True)
+                os.remove(audio_temp)
+                audio_temp = audio_compressed
+                
+                size_mb = os.path.getsize(audio_temp) / (1024 * 1024)
+                console.print(f"[blue]Tamanho após compressão: {size_mb:.1f} MB[/blue]")
+            
+            return audio_temp
+        else:
+            console.print("[red]Erro: Não foi possível extrair áudio do vídeo.[/red]")
+            return None
+            
+    except subprocess.CalledProcessError as e:
+        console.print(f"[red]Erro ao extrair áudio: {e.stderr}[/red]")
+        return None
+    except Exception as e:
+        console.print(f"[red]Erro inesperado: {e}[/red]")
+        return None
 
 
 def baixar_youtube(url):
@@ -67,6 +142,11 @@ def gravar_tela():
 def transcrever(audio_path):
     print("Enviando áudio para transcrição, aguarde...")
     try:
+        # Verificar tamanho do arquivo
+        file_size = os.path.getsize(audio_path)
+        size_mb = file_size / (1024 * 1024)
+        console.print(f"[blue]Enviando arquivo de {size_mb:.1f} MB para transcrição...[/blue]")
+        
         with open(audio_path, "rb") as file:
             transcription = client.audio.transcriptions.create(
                 file=(audio_path, file.read()),
@@ -83,6 +163,43 @@ def transcrever(audio_path):
     except KeyboardInterrupt:
         print("\nTranscrição interrompida pelo usuário.")
         return ""
+    except Exception as e:
+        if "request_too_large" in str(e):
+            console.print("[red]Arquivo muito grande para a API. Tentando comprimir mais...[/red]")
+            # Tentar comprimir ainda mais
+            try:
+                audio_compressed = tempfile.mktemp(suffix=".mp3")
+                cmd_compress = [
+                    'ffmpeg', '-i', audio_path,
+                    '-acodec', 'mp3', '-ar', '8000', '-ac', '1',
+                    '-b:a', '16k', '-y', audio_compressed
+                ]
+                subprocess.run(cmd_compress, check=True, capture_output=True, text=True)
+                
+                if os.path.exists(audio_compressed):
+                    size_mb = os.path.getsize(audio_compressed) / (1024 * 1024)
+                    console.print(f"[blue]Tentando novamente com arquivo de {size_mb:.1f} MB...[/blue]")
+                    
+                    with open(audio_compressed, "rb") as file:
+                        transcription = client.audio.transcriptions.create(
+                            file=(audio_compressed, file.read()),
+                            model="whisper-large-v3-turbo",
+                            response_format="verbose_json",
+                            timestamp_granularities=["word"],
+                        )
+                        texto = transcription.text
+                        print("\n[Transcrição]")
+                        console.rule("Transcrição")
+                        console.print(texto)
+                        input("\nPressione ENTER para continuar...")
+                        os.remove(audio_compressed)
+                        return texto
+            except Exception as e2:
+                console.print(f"[red]Erro na segunda tentativa: {e2}[/red]")
+                return ""
+        else:
+            console.print(f"[red]Erro na transcrição: {e}[/red]")
+            return ""
 
 def salvar_transcricao(origem, titulo, texto):
     db.insert({
@@ -218,7 +335,7 @@ def main():
             console.clear()
             fonte = questionary.select(
                 "Escolha a fonte do áudio:",
-                choices=["1. YouTube", "2. Microfone", "3. Tela", "4. Voltar"]).ask()
+                choices=["1. YouTube", "2. Microfone", "3. Tela", "4. Arquivo local", "5. Voltar"]).ask()
             
             if fonte.startswith("1."):
                 url = questionary.text("URL do vídeo:").ask()
@@ -240,6 +357,27 @@ def main():
                 nome = texto[:50] + "..." if len(texto) > 50 else texto
                 salvar_transcricao("tela", nome, texto)
                 os.remove(audio)
+
+            elif fonte.startswith("4."):
+                arquivo = selecionar_arquivo_video()
+                # Debug: mostrar o que foi recebido
+                console.print(f"[blue]Caminho recebido: '{arquivo}'[/blue]")
+                if arquivo and os.path.exists(arquivo):
+                    audio = extrair_audio_video(arquivo)
+                    if audio:
+                        texto = transcrever(audio)
+                        nome = os.path.basename(arquivo)
+                        salvar_transcricao("arquivo_local", nome, texto)
+                        os.remove(audio)
+                    else:
+                        console.print("[red]Não foi possível processar o arquivo de vídeo.[/red]")
+                        input("Pressione ENTER para continuar...")
+                elif arquivo:
+                    console.print("[red]Arquivo não encontrado.[/red]")
+                    input("Pressione ENTER para continuar...")
+                else:
+                    console.print("[yellow]Nenhum arquivo selecionado.[/yellow]")
+                    input("Pressione ENTER para continuar...")
 
             else:
                 continue

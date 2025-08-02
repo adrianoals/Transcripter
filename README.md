@@ -4,6 +4,7 @@ Transcripter é um sistema de terminal completo para transcrição e análise de
 - Gravar e transcrever áudio do microfone
 - Gravar e transcrever o áudio do sistema (reuniões, vídeos, etc.)
 - Baixar e transcrever o áudio de vídeos do YouTube
+- **Transcrever vídeos locais da sua máquina** (MP4, AVI, MOV, MKV, etc.)
 - Consultar e gerenciar um histórico de transcrições
 - Analisar qualquer transcrição com IA conversacional (chat com contexto)
 - Deletar transcrições específicas
@@ -68,6 +69,26 @@ uv run transcripter/main.py
 ```
 
 Siga o menu interativo para gravar, transcrever, analisar e gerenciar suas transcrições.
+
+---
+
+## Como usar
+
+1. **Nova gravação** → Escolha a fonte:
+   - **YouTube**: Cole a URL do vídeo
+   - **Microfone**: Grave áudio direto do microfone
+   - **Tela**: Capture áudio do sistema (reuniões, vídeos, etc.)
+   - **Arquivo local**: Selecione um vídeo da sua máquina
+
+2. **Análise de transcrições**: Visualize, analise com IA ou delete transcrições
+
+---
+
+## Formatos de vídeo suportados
+
+Para vídeos locais, o sistema suporta:
+- MP4, AVI, MOV, MKV, WMV, FLV, WebM
+- Qualquer formato que o ffmpeg consiga processar
 
 ---
 
