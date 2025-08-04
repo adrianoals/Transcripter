@@ -18,9 +18,40 @@ from agno.models.openai import OpenAIChat
 from dotenv import load_dotenv
 load_dotenv()
 
-db = TinyDB("transcricoes.json")
+# Usar caminho absoluto para o banco de dados
+import os
+db_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "transcricoes.json")
+db = TinyDB(db_path)
 client = Groq()
 console = Console()
+
+# Preços das APIs (em USD)
+GROQ_WHISPER_PRICE_PER_MINUTE = 0.006  # $0.006 por minuto
+OPENAI_GPT4_INPUT_PRICE_PER_1K = 0.03   # $0.03 por 1K tokens entrada
+OPENAI_GPT4_OUTPUT_PRICE_PER_1K = 0.06  # $0.06 por 1K tokens saída
+
+def calcular_custo_transcricao(duracao_minutos):
+    """Calcula o custo da transcrição baseado na duração"""
+    return duracao_minutos * GROQ_WHISPER_PRICE_PER_MINUTE
+
+def calcular_custo_analise_ia(tokens_entrada, tokens_saida):
+    """Calcula o custo da análise com IA baseado nos tokens"""
+    custo_entrada = (tokens_entrada / 1000) * OPENAI_GPT4_INPUT_PRICE_PER_1K
+    custo_saida = (tokens_saida / 1000) * OPENAI_GPT4_OUTPUT_PRICE_PER_1K
+    return custo_entrada + custo_saida
+
+def obter_duracao_audio(audio_path):
+    """Obtém a duração do arquivo de áudio em minutos"""
+    try:
+        cmd = [
+            'ffprobe', '-v', 'quiet', '-show_entries', 'format=duration',
+            '-of', 'csv=p=0', audio_path
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        duracao_segundos = float(result.stdout.strip())
+        return duracao_segundos / 60  # Converter para minutos
+    except:
+        return None
 
 def selecionar_arquivo_video():
     """Seleciona um arquivo de vídeo usando interface gráfica"""
@@ -147,6 +178,12 @@ def transcrever(audio_path):
         size_mb = file_size / (1024 * 1024)
         console.print(f"[blue]Enviando arquivo de {size_mb:.1f} MB para transcrição...[/blue]")
         
+        # Obter duração do áudio
+        duracao_minutos = obter_duracao_audio(audio_path)
+        if duracao_minutos:
+            custo_estimado = calcular_custo_transcricao(duracao_minutos)
+            console.print(f"[yellow]Duração: {duracao_minutos:.1f} minutos | Custo estimado: ${custo_estimado:.4f}[/yellow]")
+        
         with open(audio_path, "rb") as file:
             transcription = client.audio.transcriptions.create(
                 file=(audio_path, file.read()),
@@ -155,6 +192,12 @@ def transcrever(audio_path):
                 timestamp_granularities=["word"],
             )
             texto = transcription.text
+            
+            # Mostrar custo final
+            if duracao_minutos:
+                custo_final = calcular_custo_transcricao(duracao_minutos)
+                console.print(f"[green]✅ Transcrição concluída! Custo: ${custo_final:.4f}[/green]")
+            
             print("\n[Transcrição]")
             console.rule("Transcrição")
             console.print(texto)
@@ -253,6 +296,10 @@ def chat_ia(transcricao):
         """
     )
 
+    # Contadores de custo
+    total_custo = 0
+    num_perguntas = 0
+
     while True:
         pergunta = questionary.text("Você:").ask()
         
@@ -260,16 +307,32 @@ def chat_ia(transcricao):
             continue
         
         if pergunta.strip().lower() == "sair":
-            console.print("\n[bold red]Conversa encerrada.[/bold red]")
+            console.print(f"\n[bold red]Conversa encerrada. Total: {num_perguntas} perguntas | Custo total: ${total_custo:.4f}[/bold red]")
             input("Pressione ENTER para voltar.")
             break
         
-        # prompt = f"""\n\nContexto da transcrição:\n" + transcricao + "\n\n" + {pergunta}"""
-        # memory_agent.print_response(pergunta, stream=True)
+        # Estimativa de tokens (aproximada)
+        tokens_entrada = len(transcricao + pergunta) // 4  # ~4 chars por token
+        tokens_saida_estimado = 200  # Estimativa conservadora
+        
+        custo_estimado = calcular_custo_analise_ia(tokens_entrada, tokens_saida_estimado)
+        console.print(f"[yellow]Custo estimado desta pergunta: ${custo_estimado:.4f}[/yellow]")
+        
         response = memory_agent.run(pergunta, stream=True)
+        resposta_completa = ""
         for msg in response:
             print(msg.content, end="", flush=True)
+            resposta_completa += msg.content
+        
         print("\n")
+        
+        # Calcular custo real (aproximado)
+        tokens_saida_real = len(resposta_completa) // 4
+        custo_real = calcular_custo_analise_ia(tokens_entrada, tokens_saida_real)
+        total_custo += custo_real
+        num_perguntas += 1
+        
+        console.print(f"[green]✅ Resposta gerada! Custo: ${custo_real:.4f} | Total: ${total_custo:.4f}[/green]")
         # console.print(f"[bold blue]IA:[/bold blue] {resposta.content if hasattr(resposta, 'content') else resposta}")
 
 def analise_transcricoes():
@@ -318,8 +381,92 @@ def analise_transcricoes():
             console.print("[red]Transcrição deletada![/red]")
             input("Pressione ENTER para voltar.")
 
+def mostrar_estatisticas_custo():
+    """Mostra estatísticas de custo das APIs"""
+    console.clear()
+    console.rule("📊 Estatísticas de Custo")
+    
+    # Tabela de preços
+    table = Table(title="Preços das APIs")
+    table.add_column("Serviço", style="bold cyan")
+    table.add_column("Modelo", style="green")
+    table.add_column("Preço", style="yellow")
+    table.add_column("Exemplo", style="white")
+    
+    table.add_row(
+        "Transcrição", 
+        "Whisper Large v3 Turbo", 
+        "$0.006/min", 
+        "10 min = $0.06"
+    )
+    table.add_row(
+        "Análise IA", 
+        "GPT-4.1", 
+        "$0.03/1K tokens", 
+        "1 pergunta = ~$0.03"
+    )
+    
+    console.print(table)
+    
+    # Dicas de economia
+    console.print("\n[bold green]💡 Dicas para economizar:[/bold green]")
+    console.print("• Use áudio comprimido (já implementado)")
+    console.print("• Faça perguntas específicas na análise")
+    console.print("• Monitore seus gastos regularmente")
+    console.print("• Configure alertas nas dashboards das APIs")
+    
+    input("\nPressione ENTER para voltar.")
+
+def consolidar_bancos_dados():
+    """Consolida os dois bancos de dados se existirem"""
+    import os
+    from tinydb import TinyDB
+    
+    # Caminhos dos bancos
+    db_raiz = os.path.join(os.path.dirname(os.path.dirname(__file__)), "transcricoes.json")
+    db_transcripter = os.path.join(os.path.dirname(__file__), "transcricoes.json")
+    
+    # Verificar se ambos existem
+    if os.path.exists(db_raiz) and os.path.exists(db_transcripter):
+        console.print("[yellow]Encontrados dois bancos de dados. Consolidando...[/yellow]")
+        
+        # Ler dados de ambos
+        db1 = TinyDB(db_raiz)
+        db2 = TinyDB(db_transcripter)
+        
+        dados1 = db1.all()
+        dados2 = db2.all()
+        
+        # Combinar dados únicos
+        todos_dados = dados1 + dados2
+        
+        # Remover duplicatas baseado em título e data
+        dados_unicos = []
+        titulos_vistos = set()
+        
+        for item in todos_dados:
+            chave = f"{item.get('titulo', '')}_{item.get('data', '')}"
+            if chave not in titulos_vistos:
+                dados_unicos.append(item)
+                titulos_vistos.add(chave)
+        
+        # Salvar no banco principal
+        db1.truncate()  # Limpar
+        for item in dados_unicos:
+            db1.insert(item)
+        
+        # Remover o banco duplicado
+        os.remove(db_transcripter)
+        
+        console.print(f"[green]✅ Consolidados {len(dados_unicos)} registros únicos![/green]")
+        return True
+    
+    return False
+
 
 def main():
+    # Consolidar bancos de dados no início
+    consolidar_bancos_dados()
     
     while True:
         console.clear()
@@ -328,7 +475,9 @@ def main():
             choices=[
                 "1. Nova gravação",
                 "2. Análise de transcrições",
-                "3. Sair"
+                "3. Estatísticas de Custo",
+                "4. Consolidar Dados",
+                "5. Sair"
             ]).ask()
         
         if escolha.startswith("1."):
@@ -384,6 +533,11 @@ def main():
 
         elif escolha.startswith("2."):
             analise_transcricoes()
+        elif escolha.startswith("3."):
+            mostrar_estatisticas_custo()
+        elif escolha.startswith("4."):
+            consolidar_bancos_dados()
+            input("Pressione ENTER para continuar...")
         else:
             break
 
