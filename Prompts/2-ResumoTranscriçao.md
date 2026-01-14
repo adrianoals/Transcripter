@@ -27,8 +27,9 @@ Para cada arquivo `.md` na pasta `transcricoes/`:
 
 **Passo 3: Preparar nome do arquivo**
 - Extrair o nome do arquivo sem a extensão `.md`
+- Remover " (Transcrição revisada)" do nome, se existir
 - Adicionar " (Resumo)" ao final do nome
-- Exemplo: `1-Estruturação de Prompts.md` → `1-Estruturação de Prompts (Resumo).md`
+- Exemplo: `1-Analisando estruturas de prompts (Transcrição revisada).md` → `1-Analisando estruturas de prompts (Resumo).md`
 
 **Passo 4: Salvar arquivo**
 - Criar pasta `resumos/` se não existir
@@ -78,14 +79,15 @@ Quero que você crie um resumo do conteúdo abaixo como se fosse EU anotando no 
 ## Regras importantes
 
 ### Sobre o nome dos arquivos
-- **Formato obrigatório**: `{nome_arquivo_sem_extensão} (Resumo).md`
-- Remover apenas a extensão `.md` do nome do arquivo original
+- **Formato obrigatório**: `{nome_arquivo_sem_extensão_sem_transcrição_revisada} (Resumo).md`
+- Remover a extensão `.md` do nome do arquivo original
+- **Remover " (Transcrição revisada)" do nome, se existir**
 - Manter todo o resto do nome original (incluindo números, hífens, espaços, caracteres especiais)
 - Adicionar " (Resumo)" antes da extensão `.md`
 - Exemplos:
-  - `1-Estruturação de Prompts.md` → `resumos/1-Estruturação de Prompts (Resumo).md`
-  - `2-Uma simples correção de Bug.md` → `resumos/2-Uma simples correção de Bug (Resumo).md`
-  - `8-Exemplo estruturado de prompts.md` → `resumos/8-Exemplo estruturado de prompts (Resumo).md`
+  - `1-Analisando estruturas de prompts (Transcrição revisada).md` → `resumos/1-Analisando estruturas de prompts (Resumo).md`
+  - `2-Dependency Auditor Agent Prompt (Transcrição revisada).md` → `resumos/2-Dependency Auditor Agent Prompt (Resumo).md`
+  - `10-Workflow Specification Prompt (Transcrição revisada).md` → `resumos/10-Workflow Specification Prompt (Resumo).md`
 
 ### Sobre o salvamento
 - Salvar sempre na pasta `resumos/` (criar pasta se não existir)
@@ -101,27 +103,27 @@ Quero que você crie um resumo do conteúdo abaixo como se fosse EU anotando no 
 Arquivos da pasta `transcricoes/`:
 ```
 transcricoes/
-  - 1-Estruturação de Prompts.md
-  - 2-Uma simples correção de Bug.md
-  - 3-Minha IA produziu um lixo.md
+  - 1-Analisando estruturas de prompts (Transcrição revisada).md
+  - 2-Dependency Auditor Agent Prompt (Transcrição revisada).md
+  - 3-Resultado gerado pelo prompt (Transcrição revisada).md
   ...
 ```
 
 ## Exemplo de execução
 ```
-Arquivos para processar: 9
+Arquivos para processar: 11
 
-Processando: 1-Estruturação de Prompts.md
-✅ Resumo criado: resumos/1-Estruturação de Prompts (Resumo).md
+Processando: 1-Analisando estruturas de prompts (Transcrição revisada).md
+✅ Resumo criado: resumos/1-Analisando estruturas de prompts (Resumo).md
 
-Processando: 2-Uma simples correção de Bug.md
-✅ Resumo criado: resumos/2-Uma simples correção de Bug (Resumo).md
+Processando: 2-Dependency Auditor Agent Prompt (Transcrição revisada).md
+✅ Resumo criado: resumos/2-Dependency Auditor Agent Prompt (Resumo).md
 
 ...
 
 --- Relatório Final ---
-Total processado: 9
-Sucessos: 9
+Total processado: 11
+Sucessos: 11
 Erros: 0
 Localização dos arquivos salvos: resumos/
 ```
