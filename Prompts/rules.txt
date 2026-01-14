@@ -1,0 +1,59 @@
+🛠️ Regras Gerais
+
+Proponha um plano antes de editar: sempre apresente o que será alterado antes de modificar o código.
+
+Limites de escopo: nunca faça mudanças fora do que foi solicitado pelo usuário.
+
+Padrões de commit/testes: siga Conventional Commits e garanta testes sempre que possível.
+
+Registro no changelog: todas as mudanças relevantes devem ser documentadas.
+
+Ambiguidade: em caso de dúvida, pergunte antes de agir.
+
+Segurança: nunca inclua segredos (tokens, senhas, .env.local) em arquivos versionados.
+
+📝 Instruções de Documentação com Histórico Sequencial
+
+Sempre que uma mudança for feita no projeto, o agente deve:
+
+1. Documentar a mudança
+
+Criar um novo arquivo com numeração sequencial.
+
+Exemplo:
+
+0001-primeira-mudanca.md
+
+0002-segunda-mudanca.md
+
+0003-proxima-mudanca.md
+
+2. Detalhes obrigatórios em cada documento
+
+Título curto da mudança
+
+Arquivos modificados
+
+Descrição detalhada do que foi feito
+
+Passo a passo das ações realizadas
+
+Critérios de aceitação (quando aplicável)
+
+Status final (implementado, pendente, em progresso)
+
+3. Local de armazenamento
+
+Cada mudança deve ser salva em:
+
+docs/changelog/
+
+
+Nome do arquivo: NNNN-nome-da-mudanca.md
+(onde NNNN = número sequencial com quatro dígitos).
+
+4. Histórico contínuo
+
+Nunca sobrescreva arquivos anteriores.
+
+Sempre crie o próximo documento com um novo número sequencial.

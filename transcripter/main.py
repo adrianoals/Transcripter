@@ -252,6 +252,183 @@ def salvar_transcricao(origem, titulo, texto):
         "data": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     })
 
+def transcrever_silencioso(audio_path):
+    """Versão silenciosa da função transcrever para processamento em lote"""
+    try:
+        # Obter duração do áudio
+        duracao_minutos = obter_duracao_audio(audio_path)
+        
+        with open(audio_path, "rb") as file:
+            transcription = client.audio.transcriptions.create(
+                file=(audio_path, file.read()),
+                model="whisper-large-v3-turbo",
+                response_format="verbose_json",
+                timestamp_granularities=["word"],
+            )
+            texto = transcription.text
+            custo = calcular_custo_transcricao(duracao_minutos) if duracao_minutos else 0
+            return texto, custo, duracao_minutos
+    except Exception as e:
+        if "request_too_large" in str(e):
+            # Tentar comprimir ainda mais
+            try:
+                audio_compressed = tempfile.mktemp(suffix=".mp3")
+                cmd_compress = [
+                    'ffmpeg', '-i', audio_path,
+                    '-acodec', 'mp3', '-ar', '8000', '-ac', '1',
+                    '-b:a', '16k', '-y', audio_compressed
+                ]
+                subprocess.run(cmd_compress, check=True, capture_output=True, text=True)
+                
+                if os.path.exists(audio_compressed):
+                    duracao_minutos = obter_duracao_audio(audio_compressed)
+                    with open(audio_compressed, "rb") as file:
+                        transcription = client.audio.transcriptions.create(
+                            file=(audio_compressed, file.read()),
+                            model="whisper-large-v3-turbo",
+                            response_format="verbose_json",
+                            timestamp_granularities=["word"],
+                        )
+                        texto = transcription.text
+                        custo = calcular_custo_transcricao(duracao_minutos) if duracao_minutos else 0
+                        os.remove(audio_compressed)
+                        return texto, custo, duracao_minutos
+            except Exception as e2:
+                raise Exception(f"Erro na segunda tentativa: {e2}")
+        else:
+            raise Exception(f"Erro na transcrição: {e}")
+
+def salvar_transcricao_arquivo(nome_arquivo, texto):
+    """Salva a transcrição como arquivo .md na pasta transcricoes/"""
+    # Criar pasta transcricoes se não existir
+    transcricoes_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "transcricoes")
+    os.makedirs(transcricoes_dir, exist_ok=True)
+    
+    # Criar nome do arquivo: nome original sem extensão + .md
+    nome_base = os.path.basename(nome_arquivo)
+    nome_sem_extensao = os.path.splitext(nome_base)[0]  # Remove extensão (.mp4, .avi, etc)
+    arquivo_md = os.path.join(transcricoes_dir, f"{nome_sem_extensao}.md")
+    
+    # Salvar texto exatamente como vem do modelo (sem modificações)
+    with open(arquivo_md, "w", encoding="utf-8") as f:
+        f.write(texto)
+    
+    return arquivo_md
+
+def processar_lista_arquivos(lista_arquivos):
+    """Processa uma lista de arquivos de vídeo, transcrevendo cada um e salvando as transcrições"""
+    # Validação inicial
+    extensoes_validas = ['.mp4', '.avi', '.mov', '.mkv', '.wmv', '.flv', '.webm']
+    arquivos_validos = []
+    arquivos_invalidos = []
+    
+    console.print("\n[bold cyan]=== Validação de Arquivos ===[/bold cyan]")
+    for arquivo in lista_arquivos:
+        if not os.path.exists(arquivo):
+            arquivos_invalidos.append((arquivo, "Arquivo não encontrado"))
+            continue
+        
+        ext = os.path.splitext(arquivo)[1].lower()
+        if ext not in extensoes_validas:
+            arquivos_invalidos.append((arquivo, f"Extensão não suportada: {ext}"))
+            continue
+        
+        arquivos_validos.append(arquivo)
+    
+    if arquivos_invalidos:
+        console.print("[yellow]Arquivos inválidos encontrados:[/yellow]")
+        for arquivo, motivo in arquivos_invalidos:
+            console.print(f"  ❌ {os.path.basename(arquivo)}: {motivo}")
+    
+    if not arquivos_validos:
+        console.print("[red]Nenhum arquivo válido para processar![/red]")
+        return
+    
+    total = len(arquivos_validos)
+    console.print(f"\n[bold green]Arquivos para processar: {total}[/bold green]")
+    for i, arquivo in enumerate(arquivos_validos, 1):
+        console.print(f"  {i}. {os.path.basename(arquivo)}")
+    
+    # Processamento sequencial
+    sucessos = []
+    erros = []
+    custo_total = 0
+    
+    console.print("\n[bold cyan]=== Iniciando Processamento ===[/bold cyan]\n")
+    
+    for idx, arquivo_video in enumerate(arquivos_validos, 1):
+        nome_arquivo = os.path.basename(arquivo_video)
+        console.print(f"[bold]Processando arquivo {idx} de {total}: {nome_arquivo}[/bold]")
+        
+        try:
+            # Passo 1: Extração de áudio
+            audio = extrair_audio_video(arquivo_video)
+            if not audio:
+                raise Exception("Não foi possível extrair áudio do vídeo")
+            
+            # Passo 2: Transcrição
+            texto, custo, duracao = transcrever_silencioso(audio)
+            if not texto:
+                raise Exception("Transcrição retornou texto vazio")
+            
+            # Passo 3: Salvamento no banco de dados
+            salvar_transcricao("arquivo_local", nome_arquivo, texto)
+            
+            # Passo 4: Salvamento como arquivo .md
+            arquivo_salvo = salvar_transcricao_arquivo(arquivo_video, texto)
+            
+            # Passo 5: Limpeza
+            if os.path.exists(audio):
+                os.remove(audio)
+            
+            # Atualizar estatísticas
+            custo_total += custo
+            sucessos.append({
+                "arquivo": nome_arquivo,
+                "custo": custo,
+                "duracao": duracao,
+                "arquivo_salvo": arquivo_salvo
+            })
+            
+            console.print(f"  ✅ Transcrição concluída! Custo: ${custo:.4f}")
+            if duracao:
+                console.print(f"  ⏱️  Duração: {duracao:.1f} minutos")
+            console.print(f"  💾 Salvo em: {os.path.basename(arquivo_salvo)}\n")
+            
+        except Exception as e:
+            erro_msg = str(e)
+            erros.append({
+                "arquivo": nome_arquivo,
+                "erro": erro_msg
+            })
+            console.print(f"  ❌ Erro: {erro_msg}\n")
+            # Limpar arquivo temporário se existir
+            try:
+                if 'audio' in locals() and os.path.exists(audio):
+                    os.remove(audio)
+            except:
+                pass
+            continue
+    
+    # Relatório final
+    console.print("\n[bold cyan]=== Relatório Final ===[/bold cyan]")
+    console.print(f"Total processado: {total}")
+    console.print(f"✅ Sucessos: {len(sucessos)}")
+    console.print(f"❌ Erros: {len(erros)}")
+    console.print(f"💰 Custo total: ${custo_total:.4f}")
+    
+    if sucessos:
+        console.print("\n[bold green]Arquivos processados com sucesso:[/bold green]")
+        for item in sucessos:
+            console.print(f"  ✅ {item['arquivo']} → {os.path.basename(item['arquivo_salvo'])}")
+    
+    if erros:
+        console.print("\n[bold red]Arquivos com erro:[/bold red]")
+        for item in erros:
+            console.print(f"  ❌ {item['arquivo']}: {item['erro']}")
+    
+    console.print(f"\n[bold]Localização dos arquivos salvos:[/bold] transcricoes/\n")
+
 def ver_historico():
     table = Table(title="Histórico de Transcrições")
     table.add_column("Nº", style="bold yellow")

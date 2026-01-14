@@ -1,0 +1,17 @@
+'/Users/adriano/Desktop/Full Cycle/Aulas/2- Prompt Engineering/3-Estrutura básica de prompts/Vídeo Aulas/1-Estruturação de Prompts.mp4'
+
+'/Users/adriano/Desktop/Full Cycle/Aulas/2- Prompt Engineering/3-Estrutura básica de prompts/Vídeo Aulas/2-Uma simples correção de Bug.mp4'
+
+'/Users/adriano/Desktop/Full Cycle/Aulas/2- Prompt Engineering/3-Estrutura básica de prompts/Vídeo Aulas/3-Minha IA produziu um lixo.mp4'
+
+'/Users/adriano/Desktop/Full Cycle/Aulas/2- Prompt Engineering/3-Estrutura básica de prompts/Vídeo Aulas/4-Prompts no processo de desenvolvimento.mp4'
+
+'/Users/adriano/Desktop/Full Cycle/Aulas/2- Prompt Engineering/3-Estrutura básica de prompts/Vídeo Aulas/5-Utilização e larga escala.mp4'
+
+'/Users/adriano/Desktop/Full Cycle/Aulas/2- Prompt Engineering/3-Estrutura básica de prompts/Vídeo Aulas/6-Guidelines e trade-offs.mp4'
+
+'/Users/adriano/Desktop/Full Cycle/Aulas/2- Prompt Engineering/3-Estrutura básica de prompts/Vídeo Aulas/7-System vs User Prompt.mp4'
+
+'/Users/adriano/Desktop/Full Cycle/Aulas/2- Prompt Engineering/3-Estrutura básica de prompts/Vídeo Aulas/8-Exemplo estruturado de prompts.mp4'
+
+'/Users/adriano/Desktop/Full Cycle/Aulas/2- Prompt Engineering/3-Estrutura básica de prompts/Vídeo Aulas/9-Finalizando com regras de ouro.mp4'
