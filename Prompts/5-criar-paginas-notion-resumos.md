@@ -1,0 +1,107 @@
+# Criar Páginas no Notion para Resumos
+
+## Objetivo
+Criar páginas no Notion para cada arquivo de resumo da pasta `resumos/`, usando o conteúdo completo de cada arquivo e nomeando as páginas com o nome do arquivo sem extensão (que já inclui " (Resumo)").
+
+## Quando executar
+Quando o usuário solicitar a criação de páginas no Notion para os arquivos de resumo da pasta `resumos/`.
+
+## Processo de execução
+
+### 1. Identificar arquivos
+- Listar todos os arquivos `.md` na pasta `resumos/`
+- Verificar se os arquivos existem e são legíveis
+- Mostrar quantos arquivos serão processados
+
+### 2. Processamento sequencial (um arquivo por vez)
+Para cada arquivo `.md` na pasta `resumos/`:
+
+**Passo 1: Ler conteúdo**
+- Ler o conteúdo completo do arquivo `.md`
+- Verificar se o arquivo não está vazio
+- Se estiver vazio, pular e registrar aviso
+
+**Passo 2: Preparar nome da página**
+- Extrair o nome do arquivo sem a extensão `.md`
+- O nome já inclui " (Resumo)" no final
+- Usar o nome completo sem extensão como título da página
+- Exemplo: `1-Estruturação de Prompts (Resumo).md` → `1-Estruturação de Prompts (Resumo)`
+
+**Passo 3: Criar página no Notion**
+- Usar a API do Notion (MCP) para criar uma nova página
+- Título da página: nome preparado no Passo 2
+- Conteúdo da página: conteúdo completo do arquivo `.md` (texto puro)
+- Salvar exatamente como está no arquivo, sem modificações
+
+**Passo 4: Feedback**
+- Mostrar status: ✅ Sucesso ou ❌ Erro
+- Se houver erro, mostrar mensagem de erro mas continuar com próximo arquivo
+
+### 3. Relatório final
+Ao final do processamento, exibir:
+- Total de arquivos processados
+- Total de páginas criadas com sucesso
+- Total de erros (se houver)
+- Lista de arquivos que falharam (se houver)
+- Links ou IDs das páginas criadas (se disponível)
+
+## Regras importantes
+
+### Sobre o nome das páginas
+- **Formato obrigatório**: `{nome_arquivo_sem_extensão}` (já inclui " (Resumo)")
+- Remover apenas a extensão `.md` do nome do arquivo
+- Manter todo o resto do nome original (incluindo números, hífens, espaços, caracteres especiais e " (Resumo)")
+- Exemplos:
+  - `1-Estruturação de Prompts (Resumo).md` → `1-Estruturação de Prompts (Resumo)`
+  - `2-Uma simples correção de Bug (Resumo).md` → `2-Uma simples correção de Bug (Resumo)`
+  - `8-Exemplo estruturado de prompts (Resumo).md` → `8-Exemplo estruturado de prompts (Resumo)`
+
+### Sobre o conteúdo
+- **NÃO modificar o conteúdo** do arquivo
+- Salvar exatamente como está no arquivo `.md`
+- Manter toda a formatação, parágrafos e estrutura original
+- O conteúdo deve ser inserido como texto na página do Notion
+
+### Sobre tratamento de erros
+- Se um arquivo falhar, registrar erro mas continuar com os próximos
+- Não interromper o processamento por causa de um arquivo
+- Ao final, informar quais arquivos falharam e por quê
+
+### Sobre a API do Notion
+- Usar as ferramentas MCP do Notion disponíveis (`mcp_Notion_notion-create-pages`)
+- Verificar se há autenticação/configuração necessária
+- Se não houver parent especificado, criar como páginas standalone (workspace-level)
+
+## Formato de entrada esperado
+Lista de arquivos da pasta `resumos/`:
+```
+resumos/
+  - 1-Estruturação de Prompts (Resumo).md
+  - 2-Uma simples correção de Bug (Resumo).md
+  - 3-Minha IA produziu um lixo (Resumo).md
+  ...
+```
+
+## Exemplo de execução
+```
+Arquivos para processar: 9
+
+Processando: 1-Estruturação de Prompts (Resumo).md
+✅ Página criada: "1-Estruturação de Prompts (Resumo)"
+
+Processando: 2-Uma simples correção de Bug (Resumo).md
+✅ Página criada: "2-Uma simples correção de Bug (Resumo)"
+
+...
+
+--- Relatório Final ---
+Total processado: 9
+Sucessos: 9
+Erros: 0
+```
+
+## Observações
+- Este prompt assume que os resumos já foram criados anteriormente
+- As páginas serão criadas no workspace do Notion do usuário
+- Se necessário especificar um parent (página pai ou database), o usuário deve informar
+- Os resumos seguem estrutura de 6 seções obrigatórias (O que é, Para que serve, Como é usado, etc.)
