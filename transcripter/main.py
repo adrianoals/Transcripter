@@ -80,6 +80,112 @@ def selecionar_arquivo_video():
             arquivo = arquivo.strip().strip("'\"")
         return arquivo
 
+def selecionar_arquivo_audio():
+    """Seleciona um arquivo de áudio usando interface gráfica"""
+    try:
+        import tkinter as tk
+        from tkinter import filedialog
+        
+        root = tk.Tk()
+        root.withdraw()  # Esconde a janela principal
+        
+        arquivo = filedialog.askopenfilename(
+            title="Selecione um arquivo de áudio",
+            filetypes=[
+                ("Áudio", "*.mp3 *.wav *.ogg *.m4a *.flac *.aac *.wma"),
+                ("Todos os arquivos", "*.*")
+            ]
+        )
+        root.destroy()
+        return arquivo if arquivo else None
+    except ImportError:
+        # Fallback para sistemas sem tkinter
+        console.print("[yellow]Interface gráfica não disponível. Digite o caminho do arquivo:[/yellow]")
+        arquivo = questionary.text("Caminho do arquivo de áudio:").ask()
+        # Limpar aspas se houver
+        if arquivo:
+            arquivo = arquivo.strip().strip("'\"")
+        return arquivo
+
+def processar_arquivo_audio(arquivo_audio):
+    """Processa um arquivo de áudio diretamente, convertendo se necessário para formato compatível"""
+    try:
+        ext = os.path.splitext(arquivo_audio)[1].lower()
+        extensoes_diretas = ['.mp3', '.wav', '.m4a', '.flac', '.aac']
+        
+        # Se já é um formato aceito diretamente pela API, usar sem conversão
+        if ext in extensoes_diretas:
+            console.print(f"[blue]Processando arquivo de áudio: {os.path.basename(arquivo_audio)}[/blue]")
+            
+            # Verificar tamanho do arquivo
+            file_size = os.path.getsize(arquivo_audio)
+            size_mb = file_size / (1024 * 1024)
+            console.print(f"[blue]Tamanho do arquivo: {size_mb:.1f} MB[/blue]")
+            
+            # Se for muito grande, comprimir
+            if size_mb > 20:  # Limite da API Groq é ~25MB
+                console.print("[yellow]Arquivo muito grande, comprimindo...[/yellow]")
+                audio_temp = tempfile.mktemp(suffix=".mp3")
+                cmd_compress = [
+                    'ffmpeg', '-i', arquivo_audio,
+                    '-acodec', 'mp3', '-ar', '16000', '-ac', '1',
+                    '-b:a', '64k', '-y', audio_temp
+                ]
+                subprocess.run(cmd_compress, check=True, capture_output=True, text=True)
+                
+                if os.path.exists(audio_temp):
+                    size_mb = os.path.getsize(audio_temp) / (1024 * 1024)
+                    console.print(f"[blue]Tamanho após compressão: {size_mb:.1f} MB[/blue]")
+                    return audio_temp
+                else:
+                    return arquivo_audio  # Fallback: tentar original mesmo sendo grande
+            else:
+                return arquivo_audio  # Usar arquivo original
+        else:
+            # Converter para MP3 se for outro formato (ex: .ogg)
+            console.print(f"[blue]Convertendo arquivo de áudio para MP3: {os.path.basename(arquivo_audio)}[/blue]")
+            audio_temp = tempfile.mktemp(suffix=".mp3")
+            
+            cmd = [
+                'ffmpeg', '-i', arquivo_audio,
+                '-acodec', 'mp3', '-ar', '16000', '-ac', '1',
+                '-b:a', '64k', '-y', audio_temp
+            ]
+            
+            subprocess.run(cmd, check=True, capture_output=True, text=True)
+            
+            if os.path.exists(audio_temp) and os.path.getsize(audio_temp) > 0:
+                size_mb = os.path.getsize(audio_temp) / (1024 * 1024)
+                console.print(f"[blue]Tamanho do áudio convertido: {size_mb:.1f} MB[/blue]")
+                
+                # Se ainda for muito grande, comprimir mais
+                if size_mb > 20:
+                    console.print("[yellow]Arquivo ainda muito grande, comprimindo mais...[/yellow]")
+                    audio_compressed = tempfile.mktemp(suffix=".mp3")
+                    cmd_compress = [
+                        'ffmpeg', '-i', audio_temp,
+                        '-acodec', 'mp3', '-ar', '8000', '-ac', '1',
+                        '-b:a', '32k', '-y', audio_compressed
+                    ]
+                    subprocess.run(cmd_compress, check=True, capture_output=True, text=True)
+                    os.remove(audio_temp)
+                    audio_temp = audio_compressed
+                    
+                    size_mb = os.path.getsize(audio_temp) / (1024 * 1024)
+                    console.print(f"[blue]Tamanho após compressão: {size_mb:.1f} MB[/blue]")
+                
+                return audio_temp
+            else:
+                console.print("[red]Erro: Não foi possível converter o arquivo de áudio.[/red]")
+                return None
+                
+    except subprocess.CalledProcessError as e:
+        console.print(f"[red]Erro ao processar áudio: {e.stderr}[/red]")
+        return None
+    except Exception as e:
+        console.print(f"[red]Erro inesperado: {e}[/red]")
+        return None
+
 def extrair_audio_video(arquivo_video):
     """Extrai áudio de um arquivo de vídeo usando ffmpeg"""
     try:
@@ -316,9 +422,12 @@ def salvar_transcricao_arquivo(nome_arquivo, texto):
     return arquivo_md
 
 def processar_lista_arquivos(lista_arquivos):
-    """Processa uma lista de arquivos de vídeo, transcrevendo cada um e salvando as transcrições"""
+    """Processa uma lista de arquivos de vídeo ou áudio, transcrevendo cada um e salvando as transcrições"""
     # Validação inicial
-    extensoes_validas = ['.mp4', '.avi', '.mov', '.mkv', '.wmv', '.flv', '.webm']
+    extensoes_video = ['.mp4', '.avi', '.mov', '.mkv', '.wmv', '.flv', '.webm']
+    extensoes_audio = ['.mp3', '.wav', '.ogg', '.m4a', '.flac', '.aac', '.wma']
+    extensoes_validas = extensoes_video + extensoes_audio
+    
     arquivos_validos = []
     arquivos_invalidos = []
     
@@ -347,7 +456,9 @@ def processar_lista_arquivos(lista_arquivos):
     total = len(arquivos_validos)
     console.print(f"\n[bold green]Arquivos para processar: {total}[/bold green]")
     for i, arquivo in enumerate(arquivos_validos, 1):
-        console.print(f"  {i}. {os.path.basename(arquivo)}")
+        ext = os.path.splitext(arquivo)[1].lower()
+        tipo = "🎬 Vídeo" if ext in extensoes_video else "🎵 Áudio"
+        console.print(f"  {i}. {os.path.basename(arquivo)} ({tipo})")
     
     # Processamento sequencial
     sucessos = []
@@ -356,15 +467,23 @@ def processar_lista_arquivos(lista_arquivos):
     
     console.print("\n[bold cyan]=== Iniciando Processamento ===[/bold cyan]\n")
     
-    for idx, arquivo_video in enumerate(arquivos_validos, 1):
-        nome_arquivo = os.path.basename(arquivo_video)
+    for idx, arquivo_media in enumerate(arquivos_validos, 1):
+        nome_arquivo = os.path.basename(arquivo_media)
+        ext = os.path.splitext(arquivo_media)[1].lower()
+        is_video = ext in extensoes_video
+        
         console.print(f"[bold]Processando arquivo {idx} de {total}: {nome_arquivo}[/bold]")
         
         try:
-            # Passo 1: Extração de áudio
-            audio = extrair_audio_video(arquivo_video)
-            if not audio:
-                raise Exception("Não foi possível extrair áudio do vídeo")
+            # Passo 1: Processar arquivo (extrair áudio de vídeo ou processar áudio diretamente)
+            if is_video:
+                audio = extrair_audio_video(arquivo_media)
+                if not audio:
+                    raise Exception("Não foi possível extrair áudio do vídeo")
+            else:
+                audio = processar_arquivo_audio(arquivo_media)
+                if not audio:
+                    raise Exception("Não foi possível processar o arquivo de áudio")
             
             # Passo 2: Transcrição
             texto, custo, duracao = transcrever_silencioso(audio)
@@ -372,13 +491,14 @@ def processar_lista_arquivos(lista_arquivos):
                 raise Exception("Transcrição retornou texto vazio")
             
             # Passo 3: Salvamento no banco de dados
-            salvar_transcricao("arquivo_local", nome_arquivo, texto)
+            origem = "arquivo_local" if is_video else "arquivo_audio"
+            salvar_transcricao(origem, nome_arquivo, texto)
             
             # Passo 4: Salvamento como arquivo .md
-            arquivo_salvo = salvar_transcricao_arquivo(arquivo_video, texto)
+            arquivo_salvo = salvar_transcricao_arquivo(arquivo_media, texto)
             
             # Passo 5: Limpeza
-            if os.path.exists(audio):
+            if os.path.exists(audio) and audio != arquivo_media:
                 os.remove(audio)
             
             # Atualizar estatísticas
@@ -404,7 +524,7 @@ def processar_lista_arquivos(lista_arquivos):
             console.print(f"  ❌ Erro: {erro_msg}\n")
             # Limpar arquivo temporário se existir
             try:
-                if 'audio' in locals() and os.path.exists(audio):
+                if 'audio' in locals() and os.path.exists(audio) and audio != arquivo_media:
                     os.remove(audio)
             except:
                 pass
@@ -661,7 +781,7 @@ def main():
             console.clear()
             fonte = questionary.select(
                 "Escolha a fonte do áudio:",
-                choices=["1. YouTube", "2. Microfone", "3. Tela", "4. Arquivo local", "5. Voltar"]).ask()
+                choices=["1. YouTube", "2. Microfone", "3. Tela", "4. Arquivo de vídeo", "5. Arquivo de áudio", "6. Voltar"]).ask()
             
             if fonte.startswith("1."):
                 url = questionary.text("URL do vídeo:").ask()
@@ -697,6 +817,28 @@ def main():
                         os.remove(audio)
                     else:
                         console.print("[red]Não foi possível processar o arquivo de vídeo.[/red]")
+                        input("Pressione ENTER para continuar...")
+                elif arquivo:
+                    console.print("[red]Arquivo não encontrado.[/red]")
+                    input("Pressione ENTER para continuar...")
+                else:
+                    console.print("[yellow]Nenhum arquivo selecionado.[/yellow]")
+                    input("Pressione ENTER para continuar...")
+
+            elif fonte.startswith("5."):
+                arquivo = selecionar_arquivo_audio()
+                console.print(f"[blue]Caminho recebido: '{arquivo}'[/blue]")
+                if arquivo and os.path.exists(arquivo):
+                    audio_processado = processar_arquivo_audio(arquivo)
+                    if audio_processado:
+                        texto = transcrever(audio_processado)
+                        nome = os.path.basename(arquivo)
+                        salvar_transcricao("arquivo_audio", nome, texto)
+                        # Limpar arquivo temporário se foi criado (diferente do original)
+                        if audio_processado != arquivo and os.path.exists(audio_processado):
+                            os.remove(audio_processado)
+                    else:
+                        console.print("[red]Não foi possível processar o arquivo de áudio.[/red]")
                         input("Pressione ENTER para continuar...")
                 elif arquivo:
                     console.print("[red]Arquivo não encontrado.[/red]")
