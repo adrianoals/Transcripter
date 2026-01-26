@@ -1,7 +1,7 @@
 # Criar Páginas no Notion para Transcrições Revisadas
 
 ## Objetivo
-Criar páginas no Notion para cada arquivo de transcrição da pasta `transcricoes/`, usando o conteúdo completo de cada arquivo e nomeando as páginas com o nome do arquivo sem extensão + " (Transcrição revisada)".
+Criar páginas no Notion para cada arquivo de transcrição da pasta `transcricoes/`, usando o conteúdo completo de cada arquivo e nomeando as páginas com o nome do arquivo sem extensão (já normalizado).
 
 ## Quando executar
 Quando o usuário solicitar a criação de páginas no Notion para os arquivos de transcrição revisados da pasta `transcricoes/`.
@@ -23,8 +23,10 @@ Para cada arquivo `.md` na pasta `transcricoes/`:
 
 **Passo 2: Preparar nome da página**
 - Extrair o nome do arquivo sem a extensão `.md`
-- Adicionar " (Transcrição revisada)" ao final do nome
+- Se o nome **já** terminar com " (Transcrição revisada)", manter como está
+- Caso contrário, adicionar " (Transcrição revisada)" ao final do nome
 - Exemplo: `1-Estruturação de Prompts.md` → `1-Estruturação de Prompts (Transcrição revisada)`
+- Exemplo: `1-Estruturação de Prompts (Transcrição revisada).md` → `1-Estruturação de Prompts (Transcrição revisada)`
 
 **Passo 3: Criar página no Notion**
 - Usar a API do Notion para criar uma nova página
@@ -47,13 +49,15 @@ Ao final do processamento, exibir:
 ## Regras importantes
 
 ### Sobre o nome das páginas
-- **Formato obrigatório**: `{nome_arquivo_sem_extensão} (Transcrição revisada)`
+- **Formato obrigatório**: `{nome_arquivo_sem_extensão_normalizado}`
 - Remover apenas a extensão `.md` do nome do arquivo
+- Se já terminar com " (Transcrição revisada)", não duplicar o sufixo
 - Manter todo o resto do nome original (incluindo números, hífens, espaços, caracteres especiais)
 - Exemplos:
   - `1-Estruturação de Prompts.md` → `1-Estruturação de Prompts (Transcrição revisada)`
   - `2-Uma simples correção de Bug.md` → `2-Uma simples correção de Bug (Transcrição revisada)`
   - `8-Exemplo estruturado de prompts.md` → `8-Exemplo estruturado de prompts (Transcrição revisada)`
+  - `1-Estruturação de Prompts (Transcrição revisada).md` → `1-Estruturação de Prompts (Transcrição revisada)`
 
 ### Sobre o conteúdo
 - **NÃO modificar o conteúdo** do arquivo
